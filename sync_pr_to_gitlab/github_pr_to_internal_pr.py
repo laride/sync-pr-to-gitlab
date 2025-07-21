@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 
 import gitlab
 import requests
@@ -152,7 +153,7 @@ def notify_maintainers(pr_head_branch, pr_base_branch, project_gl, mr_iid):
 
     codeowners_list = []
     for file in modified_files:
-        cmd = f'/usr/bin/python3 {CODEOWNERS_CHECK_PATH} identify {file}'
+        cmd = f'{sys.executable} {CODEOWNERS_CHECK_PATH} identify {file}'
         try:
             output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as exc:

@@ -18,7 +18,8 @@ from gitlab.exceptions import GitlabGetError
 GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
 GITLAB_URL = os.environ['GITLAB_URL']
 GITLAB_TOKEN = os.environ['GITLAB_TOKEN']
-GITLAB_NAMESPACE = os.environ.get('GITLAB_NAMESPACE', 'espressif')
+DEFAULT_GITLAB_NAMESPACE = 'espressif'
+GITLAB_NAMESPACE = os.environ.get('GITLAB_NAMESPACE', DEFAULT_GITLAB_NAMESPACE)
 
 GITHUB_REMOTE = 'origin'
 GITLAB_REMOTE = 'gitlab'
@@ -31,7 +32,7 @@ LABEL_UPDATE = 'PR-Sync-Update'
 CODEOWNERS_CHECK_PATH = './tools/ci/check_codeowners.py'
 
 
-def pr_check_approver(pr_creator, pr_comments_url, pr_approve_labeller):
+def pr_check_approver(pr_creator, pr_comments_url, pr_approve_labeller, esp_idf_flow):
     print('Checking PR comment and affixed label...')
     # Requires Github Access Token, with Push Access
 
@@ -40,7 +41,11 @@ def pr_check_approver(pr_creator, pr_comments_url, pr_approve_labeller):
 
     for comment in reversed(r_data):
         comment_body = comment['body']
-        if bool(re.match('sha=', comment_body, re.I)) and comment['user']['login'] == pr_approve_labeller != pr_creator:
+
+        if (
+            bool(re.match('sha=', comment_body, re.I)) and comment['user']['login'] == pr_approve_labeller
+            and (esp_idf_flow is False or pr_approve_labeller != pr_creator) # allow to be creator and approver the same person in non-esp-idf flow
+        ):
             return comment_body[4:]
 
     raise RuntimeError('PR Comment Error: Ensure that Command comment exists and PR commenter and labeller match!')
@@ -173,13 +178,19 @@ def main():
         print('Not running in GitHub action context, nothing to do')
         return
 
-    if not os.environ['GITHUB_REPOSITORY'].startswith('espressif/'):
-        print('Not an Espressif repo!')
-        return
+    if GITLAB_NAMESPACE == DEFAULT_GITLAB_NAMESPACE:
+        github_repo_namespace = os.environ['GITHUB_REPOSITORY'].split('/')[0]
+        if  github_repo_namespace != DEFAULT_GITLAB_NAMESPACE:
+            print(f'Cannot sync {github_repo_namespace} namespace repo to {DEFAULT_GITLAB_NAMESPACE} GitLab repo!')
+            return
 
     # The path of the file with the complete webhook event payload. For example, /github/workflow/event.json.
     with open(os.environ['GITHUB_EVENT_PATH'], 'r', encoding='utf-8') as file:
         event = json.load(file)
+
+    repo_fullname = event['repository']['full_name']
+
+    is_esp_idf = repo_fullname == 'espressif/esp-idf'
 
     pr_label = event['label']['name']
     pr_labels_list = event['pull_request']['labels']
@@ -188,9 +199,7 @@ def main():
     pr_creator = event['pull_request']['user']['login']
     pr_comments_url = event['pull_request']['comments_url']
     # Checks whether the approve labeller and workflow initiator are the same
-    pr_commit_id = pr_check_approver(pr_creator, pr_comments_url, pr_approve_labeller)
-
-    repo_fullname = event['repository']['full_name']
+    pr_commit_id = pr_check_approver(pr_creator, pr_comments_url, pr_approve_labeller, is_esp_idf)
 
     pr_num = event['pull_request']['number']
     pr_head_branch = 'contrib/github_pr_' + str(pr_num)
@@ -239,14 +248,16 @@ def main():
     mr_desc = '## Description \n' + pr_body + '\n ##### (Add more info here)' + '\n## Related'
     mr_desc += '\n* Closes ' + pr_jira_issue
     mr_desc += '\n* Merges ' + pr_html_url
-    mr_desc += (
-        '\n## Release notes (Mandatory)\n* [component/development area] <Please update release notes, do NOT remove GitHub PR pointer> (' + pr_html_url + ')'
-    )
+    if is_esp_idf:
+        mr_desc += (
+            '\n## Release notes (Mandatory)\n* [component/development area] <Please update release notes, do NOT remove GitHub PR pointer> (' + pr_html_url + ')'
+        )
 
     mr.description = mr_desc
     mr.save()
 
-    notify_maintainers(pr_head_branch, pr_base_branch, project_gl, mr.iid)
+    if is_esp_idf:
+        notify_maintainers(pr_head_branch, pr_base_branch, project_gl, mr.iid)
 
     print('Done with the workflow!')
 

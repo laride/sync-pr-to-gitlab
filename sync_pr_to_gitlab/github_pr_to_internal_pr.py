@@ -43,8 +43,9 @@ def pr_check_approver(pr_creator, pr_comments_url, pr_approve_labeller, esp_idf_
         comment_body = comment['body']
 
         if (
-            bool(re.match('sha=', comment_body, re.I)) and comment['user']['login'] == pr_approve_labeller
-            and (esp_idf_flow is False or pr_approve_labeller != pr_creator) # allow to be creator and approver the same person in non-esp-idf flow
+            bool(re.match('sha=', comment_body, re.I))
+            and comment['user']['login'] == pr_approve_labeller
+            and (esp_idf_flow is False or pr_approve_labeller != pr_creator)  # allow to be creator and approver the same person in non-esp-idf flow
         ):
             return comment_body[4:]
 
@@ -110,7 +111,9 @@ def update_mr(pr_num, pr_head_branch, pr_commit_id, project_gl):
 
 
 # Merge PRs with/without Rebase
-def sync_pr(pr_num, pr_head_branch, pr_commit_id, project_gl, pr_base_branch, pr_html_url, rebase_flag):  # pylint: disable=too-many-arguments
+def sync_pr(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    pr_num, pr_head_branch, pr_commit_id, project_gl, pr_base_branch, pr_html_url, rebase_flag
+):
     try:
         project_gl.branches.get(pr_head_branch)
     except GitlabGetError:
@@ -180,7 +183,7 @@ def main():
 
     if GITLAB_NAMESPACE == DEFAULT_GITLAB_NAMESPACE:
         github_repo_namespace = os.environ['GITHUB_REPOSITORY'].split('/')[0]
-        if  github_repo_namespace != DEFAULT_GITLAB_NAMESPACE:
+        if github_repo_namespace != DEFAULT_GITLAB_NAMESPACE:
             print(f'Cannot sync {github_repo_namespace} namespace repo to {DEFAULT_GITLAB_NAMESPACE} GitLab repo!')
             return
 
@@ -264,7 +267,9 @@ def main():
     mr_desc += '\n* Merges ' + pr_html_url
     if is_esp_idf:
         mr_desc += (
-            '\n## Release notes (Mandatory)\n* [component/development area] <Please update release notes, do NOT remove GitHub PR pointer> (' + pr_html_url + ')'
+            '\n## Release notes (Mandatory)\n* [component/development area] <Please update release notes, do NOT remove GitHub PR pointer> ('
+            + pr_html_url
+            + ')'
         )
 
     mr.description = mr_desc

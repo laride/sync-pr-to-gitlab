@@ -15,7 +15,7 @@ repos:
       - id: check-executables-have-shebangs # Checks executables have a proper shebang
       - id: mixed-line-ending # Detects mixed line endings (CRLF/LF)
         args: ['-f=lf'] # Forces files to use LF line endings
-      - id: double-quote-string-fixer # Converts single quotes to double quotes in strings
+      - id: double-quote-string-fixer # Converts double quotes to single quotes in strings
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.3.4

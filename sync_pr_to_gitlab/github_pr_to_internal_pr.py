@@ -213,9 +213,22 @@ def main():
 
     # Getting the PR title and body
     pr_title = event['pull_request']['title']
-    idx = pr_title.find(os.environ['JIRA_PROJECT'])  # Finding the JIRA issue tag
-    pr_title_desc = pr_title[0 : idx - 2] + ' (GitHub PR)'
-    pr_jira_issue = pr_title[idx:-1]
+    jira_project = os.environ.get('JIRA_PROJECT')
+    pr_jira_issue = None
+    pr_title_desc = pr_title + ' (GitHub PR)'
+    if jira_project:
+        jira_issue_pattern = re.compile(r'(?<![A-Za-z0-9_-])' + re.escape(jira_project) + r'-\d+(?![A-Za-z0-9_-])')
+        jira_match = jira_issue_pattern.search(pr_title)
+        if jira_match:
+            pr_jira_issue = jira_match.group(0)
+            pr_title_without_jira = re.sub(
+                r'\s*[\[(]?\s*' + re.escape(pr_jira_issue) + r'\s*[\])]?\s*',
+                ' ',
+                pr_title,
+                count=1,
+            )
+            pr_title_without_jira = re.sub(r'\s{2,}', ' ', pr_title_without_jira).strip()
+            pr_title_desc = (pr_title_without_jira or pr_title) + ' (GitHub PR)'
     pr_body = str(event['pull_request']['body'])
 
     # Gitlab setup and cloning internal codebase
@@ -246,7 +259,8 @@ def main():
 
     print('Updating merge request description...')
     mr_desc = '## Description \n' + pr_body + '\n ##### (Add more info here)' + '\n## Related'
-    mr_desc += '\n* Closes ' + pr_jira_issue
+    if pr_jira_issue:
+        mr_desc += '\n* Closes ' + pr_jira_issue
     mr_desc += '\n* Merges ' + pr_html_url
     if is_esp_idf:
         mr_desc += (
